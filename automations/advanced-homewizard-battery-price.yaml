@@ -1,0 +1,203 @@
+# HomeWizard Battery Dynamic Control Automation
+# Author: Joost Smits
+# License: MIT
+# Repository: https://github.com/eurojojo/homewizard-dynamic-battery
+#
+# This automation controls the HomeWizard Plug-In Battery using
+# ENTSO-e percentile thresholds (Q1/Q3), combined with PV export,
+# grid load and profitability logic.
+
+alias: HomeWizard Battery Dynamic Control
+description: >
+  Smart control of the HomeWizard Plug-In Battery based on ENTSO-e prices,
+  PV export surplus and household load. Uses Q1/Q3 percentile thresholds
+  instead of fixed margins for cheap/expensive hours.
+
+mode: single
+
+# ────────────────────────────────────────────────────────────────
+# TRIGGERS
+# ────────────────────────────────────────────────────────────────
+triggers:
+  # Trigger whenever the current market price changes
+  - entity_id: sensor.entso_e_current_electricity_market_price
+    trigger: state
+
+  # And every 5 minutes to respond to SoC/load/export changes
+  - minutes: /5
+    trigger: time_pattern
+
+conditions: []
+
+actions:
+  # ────────────────────────────────────────────────────────────────
+  # VARIABLES
+  # ────────────────────────────────────────────────────────────────
+  - variables:
+      # Price information
+      current: "{{ states('sensor.entso_e_current_electricity_market_price') | float(0) }}"
+      lowest: "{{ states('sensor.entso_e_lowest_energy_price') | float(0) }}"
+      highest: "{{ states('sensor.entso_e_highest_energy_price') | float(0) }}"
+
+      # Q1 / Q3 percentile thresholds
+      low_threshold: "{{ states('sensor.entso_e_low_price_threshold') | float(0) }}"
+      high_threshold: "{{ states('sensor.entso_e_high_price_threshold') | float(0) }}"
+
+      # Battery and power status
+      soc: "{{ states('sensor.plug_in_battery_laadpercentage') | float(0) }}"
+      export_power: "{{ states('sensor.p1_export_power') | float(0) }}"
+      import_power: "{{ states('sensor.p1_import_power') | float(0) }}"
+
+      # Profit calculation and thresholds
+      tax: 0.14
+      min_export_power: 0.15        # Filter out measurement noise (~150 W)
+      heavy_load_threshold: 3.5     # Oven / dishwasher level load
+      super_heavy_load_threshold: 9 # EV charging level load
+      min_profit: 0.02              # Minimum arbitrage profit (2 cents/kWh)
+      rt_profit: "{{ ((highest + tax) * 0.75) - (lowest + tax) }}"
+
+  # Ensure all required ENTSO-e sensors have valid states
+  - condition: template
+    value_template: >
+      {{
+        states('sensor.entso_e_current_electricity_market_price') not in ['unknown','unavailable']
+        and states('sensor.entso_e_lowest_energy_price') not in ['unknown','unavailable']
+        and states('sensor.entso_e_highest_energy_price') not in ['unknown','unavailable']
+      }}
+
+  # ────────────────────────────────────────────────────────────────
+  # DECISION LOGIC
+  # ────────────────────────────────────────────────────────────────
+  - choose:
+
+      # ────────────────────────────────────────────────────────────
+      # 1. SUPER HEAVY LOAD — e.g. EV charging
+      # Battery must stay completely out of the way → standby
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: "{{ import_power > super_heavy_load_threshold }}"
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: standby }
+
+      # ────────────────────────────────────────────────────────────
+      # 2. ARBITRAGE NOT PROFITABLE ENOUGH
+      # If potential spread profit is too low: assist only with
+      # self-consumption and avoid battery stress under heavy load.
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: "{{ rt_profit <= min_profit }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ import_power > heavy_load_threshold and
+                         current < high_threshold }}
+                sequence:
+                  - action: select.select_option
+                    target: { entity_id: select.p1_meter_batterijgroepmodus }
+                    data: { option: standby }
+            default:
+              - action: select.select_option
+                target: { entity_id: select.p1_meter_batterijgroepmodus }
+                data: { option: zero }
+
+      # ────────────────────────────────────────────────────────────
+      # 3. EXPENSIVE HOURS — above high_threshold
+      # Always discharge → zero
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: "{{ current > high_threshold }}"
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: zero }
+
+      # ────────────────────────────────────────────────────────────
+      # 4. CHEAP HOURS + BATTERY (NEARLY) FULL
+      # Do nothing → standby
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: "{{ current <= low_threshold and soc >= 98 }}"
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: standby }
+
+      # ────────────────────────────────────────────────────────────
+      # 5. CHEAP HOURS + PV EXPORT + NOT FULL
+      # Use surplus → zero (charge from solar)
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current <= low_threshold and soc < 98 and
+                 export_power > min_export_power }}
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: zero }
+
+      # ────────────────────────────────────────────────────────────
+      # 6. CHEAP HOURS + NO PV EXPORT + NOT FULL
+      # Charge from the grid → to_full
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current <= low_threshold and soc < 98 and
+                 export_power <= min_export_power }}
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: to_full }
+
+      # ────────────────────────────────────────────────────────────
+      # 7. MIDZONE (between low_threshold and high_threshold)
+      # With PV surplus → zero
+      # Otherwise → standby
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current > low_threshold and
+                 current <= high_threshold }}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ export_power > min_export_power and soc < 98 }}
+                sequence:
+                  - action: select.select_option
+                    target: { entity_id: select.p1_meter_batterijgroepmodus }
+                    data: { option: zero }
+            default:
+              - action: select.select_option
+                target: { entity_id: select.p1_meter_batterijgroepmodus }
+                data: { option: standby }
+
+    # ────────────────────────────────────────────────────────────────
+    # FALLBACK — applies whenever no other logic branch matches.
+    # Midzone defaults to standby, except when SoC < 10%.
+    # A nearly-empty battery must not get stuck in standby.
+    # ────────────────────────────────────────────────────────────────
+    default:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ soc < 10 }}"
+            sequence:
+              - action: select.select_option
+                target: { entity_id: select.p1_meter_batterijgroepmodus }
+                data: { option: zero }
+        default:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: standby }
