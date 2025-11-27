@@ -43,7 +43,7 @@ This repository provides a solution to that missing functionality, fully configu
 ### 2. Daily electricity prices curve
 *Shows a daytime mini-peak, a midday dip, and a strong evening price spike.*
 
-![Daily prices (NextEnergy app)](docs/img/price-curve.png)
+<img src="docs/img/price-curve.png" width="300" />
 
 ---
 
