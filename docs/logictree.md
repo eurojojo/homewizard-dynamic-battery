@@ -2,6 +2,7 @@
 *(Decision Tree Overview)*
 
 This document describes the full decision logic used to control the HomeWizard Plug-In Battery, based on ENTSO-e electricity prices, PV export, household load, and battery state of charge.  
+
 It corresponds 1:1 with the implementation in [**`automations/advanced_pricing_sensors.yaml`**](automations/advanced_pricing_sensors.yaml).
 
 The automation uses **percentile-based thresholds** derived from the daily price curve:
@@ -10,6 +11,8 @@ The automation uses **percentile-based thresholds** derived from the daily price
 - `high_threshold` ≈ Q3 (75th percentile) → **expensive hours**  
 
 Between these thresholds lies the **mid-zone**, where behaviour is more conservative and focused on self-consumption.
+
+In addition, a daily **round-trip profit** estimate is computed from today’s minimum and maximum prices (including a tax component and round-trip efficiency). When the spread is too small, normal price arbitrage is effectively disabled.
 
 ---
 
@@ -20,7 +23,7 @@ Between these thresholds lies the **mid-zone**, where behaviour is more conserva
 - **Action:**  
   `standby`  
 - **Reason:**  
-  When the household connection is heavily loaded (typical for EV charging), the battery must stay completely out of the way and not add any extra current.
+  When the household connection is heavily loaded (typical for EV charging), the battery must stay completely out of the way and not add any extra current. Grid safety takes precedence over arbitrage or self-consumption.
 
 ---
 
@@ -31,7 +34,9 @@ Between these thresholds lies the **mid-zone**, where behaviour is more conserva
 - **Action:**  
   `zero`  
 - **Reason:**  
-  This is the “charge-only” hack: whenever there is real PV surplus and the battery is not full, the mode is forced to `zero` so that the surplus can be absorbed, even if the battery was previously in `standby`. Price level does **not** matter here.
+  This is the “charge-only” hack: whenever there is real PV surplus and the battery is not full, the mode is forced to `zero` so that the surplus can be absorbed, even if the battery was previously in `standby`.
+
+  In other words: **PV export always wins** (as long as SoC < 98%), regardless of price zone or arbitrage profit. This compensates for the lack of a native “charge-only” mode in the HomeWizard app.
 
 ---
 
@@ -40,43 +45,27 @@ Between these thresholds lies the **mid-zone**, where behaviour is more conserva
 - **Condition:**  
   `rt_profit <= min_profit`  
 
+Here the expected round-trip profit of “buy low, sell high” (including taxes and 75% round-trip efficiency) is too small to be meaningful. In this situation the battery behaves very cautiously and mostly avoids cycling for price reasons.
+
 Inside this branch:
 
-### 3.1 Heavy load, not in expensive zone
-
-- **Condition:**  
-  `import_power > heavy_load_threshold AND current < high_threshold`  
-- **Action:**  
-  `standby`  
-- **Reason:**  
-  When prices are not truly expensive and arbitrage is barely profitable, the battery should avoid extra stress during heavy household loads.
-
-### 3.2 No heavy load, PV export available
-
-- **Condition:**  
-  `export_power > min_export_power`  
-- **Action:**  
-  `zero`  
-- **Reason:**  
-  Use the battery for self-consumption only: soak up PV surplus instead of exporting it.
-
-### 3.3 No heavy load, no PV export, price not expensive
+### 3.1 Non-expensive hours
 
 - **Condition:**  
   `current < high_threshold`  
 - **Action:**  
   `standby`  
 - **Reason:**  
-  With no export and no significant price signal, the safest behaviour is to idle.
+  When prices are not in the expensive zone and arbitrage profit is marginal, the battery avoids extra wear and tear. PV surplus is still handled by Rule 2, so this branch mainly covers “normal” consumption without export.
 
-### 3.4 Otherwise (expensive zone)
+### 3.2 Expensive hours
 
 - **Condition:**  
-  *(implicit `else` in this branch)*  
+  *(implicit “else” in this branch, i.e. `current >= high_threshold`)*  
 - **Action:**  
   `zero`  
 - **Reason:**  
-  If we end up in the expensive zone despite low arbitrage profit, the battery may still discharge to shave the most expensive hours.
+  Even on low-spread days there can be a few clearly expensive hours. In those moments the battery is allowed to discharge to shave the worst peaks.
 
 ---
 
@@ -87,7 +76,7 @@ Inside this branch:
 - **Action:**  
   `zero`  
 - **Reason:**  
-  Outside of the special “arbitrage not profitable” case above, expensive hours are always a signal to discharge and reduce peak price exposure.
+  When arbitrage *is* profitable (Rule 3 does **not** apply), expensive hours are a clear signal to discharge. The battery helps reduce exposure to high prices by supplying local demand.
 
 ---
 
@@ -98,62 +87,41 @@ Inside this branch:
 - **Action:**  
   `standby`  
 - **Reason:**  
-  When prices are cheap but the battery is already almost full, it is better to stop cycling to preserve battery life and avoid pushing SoC beyond ~98%.
+  When prices are cheap but the battery is already almost full, it is better to stop cycling to preserve battery life and avoid pushing SoC beyond ~98%. The system effectively “parks” the battery until either SoC drops again or price conditions change.
 
 ---
 
-## 6. Cheap hours + PV export + not full
-
-- **Condition:**  
-  `current <= low_threshold AND soc < 98 AND export_power > min_export_power`  
-- **Action:**  
-  `zero`  
-- **Reason:**  
-  In cheap hours with PV surplus and remaining capacity, the battery should absorb the surplus instead of exporting.
-
----
-
-## 7. Cheap hours + no PV export + not full
+## 6. Cheap hours + no PV export + not full
 
 - **Condition:**  
   `current <= low_threshold AND soc < 98 AND export_power <= min_export_power`  
 - **Action:**  
   `to_full`  
 - **Reason:**  
-  When there is no PV surplus but prices are cheap, the battery may be charged from the grid up to full.
+  In cheap hours, with no PV surplus and room left in the battery, it is advantageous to charge from the grid. The battery is filled in anticipation of later, more expensive hours.  
+
+  Cases with PV surplus in cheap hours are already captured by **Rule 2 (PV export hack)**, so they no longer appear here.
 
 ---
 
-## 8. Mid-zone (between low_threshold and high_threshold)
+## 7. Mid-zone (between low_threshold and high_threshold)
 
 - **Condition:**  
   `low_threshold < current <= high_threshold`  
-
-Inside this branch:
-
-### 8.1 Mid-zone with PV export and room in the battery
-
-- **Condition:**  
-  `export_power > min_export_power AND soc < 98`  
-- **Action:**  
-  `zero`  
-- **Reason:**  
-  In mid-zone prices, the battery will still absorb PV surplus — but only when there is room left.
-
-### 8.2 Mid-zone without PV export (or battery nearly full)
-
 - **Action:**  
   `standby`  
 - **Reason:**  
-  When there is no surplus or little room left, the battery idles in mid-zone hours.
+  In the mid-zone, prices are neither clearly cheap nor clearly expensive. After the PV export hack (Rule 2) has had its chance to wake the battery for surplus solar, the remaining mid-zone behaviour is simple: the battery idles in `standby`.  
+
+  This avoids unnecessary cycling in hours where the price signal is ambiguous.
 
 ---
 
-## 9. Fallback behaviour
+## 8. Fallback behaviour
 
 The fallback applies if none of the above branches match (a safety net).
 
-### 9.1 Very low battery (< 10% SoC)
+### 8.1 Very low battery (< 10% SoC)
 
 - **Condition:**  
   `soc < 10`  
@@ -161,21 +129,21 @@ The fallback applies if none of the above branches match (a safety net).
   `zero`  
 - **Reason:**  
   A nearly empty battery must never get stuck in `standby`.  
-  It must be allowed to charge as soon as conditions permit, independent of price quirks.
+  It must be allowed to participate again (i.e. charge when conditions allow), independent of small glitches or edge cases in the other rules.
 
-### 9.2 Otherwise (SoC ≥ 10%)
+### 8.2 Otherwise (SoC ≥ 10%)
 
 - **Action:**  
   `standby`  
 - **Reason:**  
-  For all other edge cases, `standby` is the safest default in the mid-zone.
+  For all other edge cases, `standby` is the safest default in the mid-zone. The battery remains available for future PV surplus or clear price signals (cheap or expensive hours).
 
 ---
 
-This decision tree is fully aligned with the automation code, including:
+This decision tree is fully aligned with the current automation code, including:
 
 - Percentile-based low/high thresholds (Q1/Q3)  
-- Export-aware behaviour and the PV “wake-up” hack  
+- The PV “wake-up” hack that makes effective use of surplus solar  
 - Heavy and super-heavy load handling  
-- Profitability logic for small or large price spreads  
-- A robust fallback that prevents a nearly-empty battery from staying idle.
+- Profitability logic based on daily min/max prices and round-trip efficiency  
+- A robust fallback that prevents a nearly empty battery from staying idle forever.

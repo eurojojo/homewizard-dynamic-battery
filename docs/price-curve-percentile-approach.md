@@ -5,6 +5,8 @@ This document explains how to derive **dynamic low/high price thresholds** from 
 
 Although ENTSO-e data is used as an example, this method works with *any* hourly price integration that exposes a list of prices (for example Nordpool, Tibber, EasyEnergy, Dynamic Energy Contract add-ons).
 
+To make this work the `Battery Group Mode` must have been unlocked, as described in the [README.md](../README.md).
+
 ---
 
 ## 📈 Five-Number Summary

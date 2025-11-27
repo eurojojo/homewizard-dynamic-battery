@@ -1,5 +1,6 @@
 # HomeWizard Battery Dynamic Control Automation
 # Author: Joost Smits
+# Version: 0.7, 27 November 2025
 # License: MIT
 # Repository: https://github.com/eurojojo/homewizard-dynamic-battery
 #
@@ -61,8 +62,8 @@ actions:
     value_template: >
       {{
         states('sensor.entso_e_current_electricity_market_price') not in ['unknown','unavailable']
-        and states('sensor.entso_e_lowest_energy_price') not in ['unknown','unavailable']
-        and states('sensor.entso_e_highest_energy_price') not in ['unknown','unavailable']
+        and states('sensor.entso_e_min_price_today') not in ['unknown','unavailable']
+        and states('sensor.entso_e_max_price_today') not in ['unknown','unavailable']
       }}
 
   # ────────────────────────────────────────────────────────────────

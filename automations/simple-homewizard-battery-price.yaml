@@ -1,5 +1,6 @@
 # HomeWizard Battery Dynamic Control Automation (Simple Version)
 # Author: Joost Smits
+# Version: 0.7, 27 November 2025
 # License: MIT
 # Repository: https://github.com/eurojojo/homewizard-dynamic-battery
 #
@@ -63,8 +64,8 @@ actions:
 
       # Profit calculation and thresholds
       tax: 0.14
-      min_export_power: 0.15
-      heavy_load_threshold: 3.5
+      min_export_power: 0.05
+      heavy_load_threshold: 2.0
       super_heavy_load_threshold: 9
       min_profit: 0.02
       rt_profit: "{{ ((highest + tax) * 0.75) - (lowest + tax) }}"
@@ -96,31 +97,50 @@ actions:
             data: { option: standby }
 
       # ────────────────────────────────────────────────────────────
-      # 2. ARBITRAGE NOT PROFITABLE ENOUGH
-      # If potential spread profit is too low: assist only with
-      # self-consumption and avoid battery stress under heavy load.
+      # 2. PV EXPORT HACK — "charge-only" when solar surplus exists
+      # Whenever there is real export and SoC < 98%, wake the battery
+      # from standby and let it absorb the surplus → zero.
+      # ────────────────────────────────────────────────────────────
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ export_power > min_export_power and
+                 soc < 98 }}
+        sequence:
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: zero }
+
+      # ────────────────────────────────────────────────────────────
+      # 3. ARBITRAGE NOT PROFITABLE ENOUGH
+      # If potential spread profit is too low: avoid using the battery
+      # for normal arbitrage. It still:
+      #  - honours EV / super heavy load (rule 1)
+      #  - honours PV surplus (rule 2)
+      #  - may discharge in truly expensive hours.
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
             value_template: "{{ rt_profit <= min_profit }}"
         sequence:
           - choose:
+              # 3.1 For all non-expensive hours → standby
               - conditions:
                   - condition: template
-                    value_template: >
-                      {{ import_power > heavy_load_threshold and
-                         current < high_threshold }}
+                    value_template: "{{ current < high_threshold }}"
                 sequence:
                   - action: select.select_option
                     target: { entity_id: select.p1_meter_batterijgroepmodus }
                     data: { option: standby }
+            # 3.2 Expensive hours (current >= high_threshold) → zero
             default:
               - action: select.select_option
                 target: { entity_id: select.p1_meter_batterijgroepmodus }
                 data: { option: zero }
 
       # ────────────────────────────────────────────────────────────
-      # 3. EXPENSIVE HOURS — above high_threshold
+      # 4. EXPENSIVE HOURS — above high_threshold
+      # When arbitrage *is* profitable:
       # Always discharge → zero
       # ────────────────────────────────────────────────────────────
       - conditions:
@@ -132,7 +152,7 @@ actions:
             data: { option: zero }
 
       # ────────────────────────────────────────────────────────────
-      # 4. CHEAP HOURS + BATTERY (NEARLY) FULL
+      # 5. CHEAP HOURS + BATTERY (NEARLY) FULL
       # Do nothing → standby
       # ────────────────────────────────────────────────────────────
       - conditions:
@@ -144,22 +164,9 @@ actions:
             data: { option: standby }
 
       # ────────────────────────────────────────────────────────────
-      # 5. CHEAP HOURS + PV EXPORT + NOT FULL
-      # Use surplus → zero (charge from solar)
-      # ────────────────────────────────────────────────────────────
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ current <= low_threshold and soc < 98 and
-                 export_power > min_export_power }}
-        sequence:
-          - action: select.select_option
-            target: { entity_id: select.p1_meter_batterijgroepmodus }
-            data: { option: zero }
-
-      # ────────────────────────────────────────────────────────────
       # 6. CHEAP HOURS + NO PV EXPORT + NOT FULL
       # Charge from the grid → to_full
+      # (PV surplus cases are already handled by rule 2)
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
@@ -173,8 +180,9 @@ actions:
 
       # ────────────────────────────────────────────────────────────
       # 7. MIDZONE (between low_threshold and high_threshold)
-      # With PV surplus → zero
-      # Otherwise → standby
+      # PV surplus cases are already handled in rule 2.
+      # Remaining midzone behaviour:
+      #  - no export → standby
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
@@ -182,22 +190,12 @@ actions:
               {{ current > low_threshold and
                  current <= high_threshold }}
         sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ export_power > min_export_power and soc < 98 }}
-                sequence:
-                  - action: select.select_option
-                    target: { entity_id: select.p1_meter_batterijgroepmodus }
-                    data: { option: zero }
-            default:
-              - action: select.select_option
-                target: { entity_id: select.p1_meter_batterijgroepmodus }
-                data: { option: standby }
+          - action: select.select_option
+            target: { entity_id: select.p1_meter_batterijgroepmodus }
+            data: { option: standby }
 
     # ────────────────────────────────────────────────────────────────
-    # FALLBACK — applies whenever no other logic branch matches.
+    # 8. FALLBACK — applies whenever no other logic branch matches.
     # Midzone defaults to standby, except when SoC < 10%.
     # A nearly-empty battery must not get stuck in standby.
     # ────────────────────────────────────────────────────────────────
