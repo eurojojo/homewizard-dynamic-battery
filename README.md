@@ -1,7 +1,7 @@
 # HomeWizard Dynamic Battery Control for Home Assistant  
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A complete, modular automation system that turns the **HomeWizard Plug-In Battery** into a *smart, price-aware, PV-aware* device — even though HomeWizard does **not** yet support “charge-only” or “discharge-only” modes.
+A complete, modular automation system that turns the [**HomeWizard Plug-In Battery**](https://www.homewizard.com/) into a *smart, price-aware, PV-aware* device — even though HomeWizard does **not** yet support “charge-only” or “discharge-only” modes.
 
 This project contains two automation strategies (simple & advanced), full documentation, and examples showing how these automations keep your power usage flat while exploiting dynamic electricity prices.
 
@@ -54,7 +54,8 @@ homewizard-dynamic-battery/
 │
 ├── automations/
 │   ├── simple-homewizard-battery-price.yaml
-│   └── advanced-homewizard-battery-price.yaml
+│   ├── advanced-homewizard-battery-price.yaml
+│   └── advanced_pricing_sensors.yaml
 │
 ├── docs/
 │   ├── logictree.md
@@ -74,6 +75,7 @@ The repository contains **two** fully documented automations.
 
 ## ✅ Simple Automation  
 **File:** `automations/simple-homewizard-battery-price.yaml`
+[**`automations/simple-homewizard-battery-price.yaml`**](../automations/simple-homewizard-battery-price.yaml)
 
 Uses:  
 - fixed *cheap* threshold = `lowest_price + 0.03 EUR`  
@@ -94,43 +96,60 @@ This automation still includes:
 
 ---
 
+## 🔓 Unlocking Battery Group Mode in Home Assistant
+
+The battery group mode (“Battery group mode”) is not located under the battery itself, but under the **P1 meter**. This entity is disabled by default.
+
+In general, it works like this (see also the Home Assistant documentation on the HomeWizard integration):
+
+1. In Home Assistant, go to **Settings → Devices & Services**.
+2. Open the **HomeWizard Energy** integration.
+3. Click on your **P1 meter** device.
+4. In the **Configuration** section, you will see a link such as `+1 disabled entity` (or another number).
+5. Click on it, open the “Battery group mode” entity and click the gear icon in the top-right corner.
+6. Enable the entity and click Save.
+7. After ~30 seconds it will appear as a normal entity, for example `select.p1_meter_batterygroupmode`.
+
+You can now also place this entity on a dashboard to see what your automation is doing.
+
+---
+
+## 👷👷‍♀️ Creating an Automation in Home Assistant
+
+We will create a single automation that:
+
+* checks the current ENTSO price and the daily curve (lowest/highest price);
+* checks the state of charge (SoC) and the import/export from the P1 meter;
+* based on that, selects the mode `zero`, `to_full`, or `standby`.
+
+### Step 1 – Create an empty automation
+
+1. Go to **Settings → Automations & Scenes → Automations**.
+2. Click **+ Add automation**.
+3. Choose **Empty automation**.
+4. At the top, enter a name, for example:  
+   `HomeWizard battery based on energy price`.
+5. Click **Save** once at the bottom.
+
+### Step 2 – Open the YAML editor
+
+1. In the same automation, click the **three dots (⋮)** in the top-right corner.
+2. Choose **Edit in YAML**.
+3. Replace the entire contents with the YAML below and adjust the `entity_id`s to match your installation if needed.
+
+---
+
 ## 🔥 Advanced Automation  
-**File:** `automations/advanced-homewizard-battery-price.yaml`
 
 This version uses **statistical analysis** of the daily ENTSO-e price curve to compute dynamic thresholds.
 
-Instead of fixed margins, the automation uses:
+The full explanation and how to install can be found here:
 
-- **Q1 (25th percentile)** → “cheap hours”  
-- **Q3 (75th percentile)** → “expensive hours”  
+📄 [**`docs/price-curve-percentile-approach.md`**](../docs/price-curve-percentile-approach.md)
 
-### Why percentiles?
+---
 
-Fixed margins assume the price curve behaves the same every day — but dynamic contracts often show:
-
-- long cheap valleys  
-- short sharp morning peaks  
-- double evening peaks  
-- flat days  
-- extremely volatile weekends  
-
-Percentiles make thresholds **curve-shaped**, not hardcoded.
-
-### How it works  
-
-The advanced automation uses two template sensors:
-
-- `sensor.entso_e_low_price_threshold` ≈ Q1  
-- `sensor.entso_e_high_price_threshold` ≈ Q3  
-
-Described in:
-
-📄 `docs/price-curve-percentile-approach.md`
-
-These sensors only recalculate when ENTSO-e updates its prices (typically once per day).  
-The main automation reuses the thresholds, making it efficient and stable.
-
-### Full decision tree
+### 🪾 Full decision tree
 
 The decision tree provides a **clear, human-readable overview** of how the automation behaves in every possible situation.  
 It is the conceptual model behind both the simple and advanced automations.  
@@ -154,62 +173,6 @@ The tree makes it easy to verify that:
 - it only performs arbitrage when it is profitable
 
 See the decision tree in `docs/logictree.md`  
-
----
-
-# 🧠 Under the Hood: The Five-Number Summary
-
-The advanced version uses the statistical concept of the **five-number summary**:
-
-- Minimum  
-- **Q1** (25th percentile)  
-- Median  
-- **Q3** (75th percentile)  
-- Maximum  
-
-From this we derive robust thresholds for:
-
-- cheap (≤ Q1)  
-- expensive (≥ Q3)  
-
-A full explanation is included in:  
-📄 `docs/price-curve-percentile-approach.md`
-
----
-
-# 📝 Requirements
-
-- Home Assistant (Docker or OS)  
-- ENTSO-e integration  
-- HomeWizard P1 integration  
-- Plug-In Battery group mode entity **enabled** in HA  
-- For advanced version: the two template sensors in your `configuration.yaml`  
-
----
-
-# 🚀 Installation
-
-### 1. Copy one automation  
-Into your Home Assistant configuration:  
-
-```
-config/automations/
-```
-
-### 2. Reload automations  
-`Settings → Developer Tools → YAML → Reload Automations`
-
-### 3. (Advanced only) Add template sensors  
-The documentation contains ready-to-paste YAML.
-
-### 4. Optional tuning  
-You *may* adjust:  
-- heavy-load thresholds  
-- export threshold  
-- minimum profit requirement  
-- SoC thresholds  
-
-Defaults work for most households.
 
 ---
 

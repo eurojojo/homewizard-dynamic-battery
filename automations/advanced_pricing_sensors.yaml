@@ -1,0 +1,104 @@
+template:
+  - sensor:
+
+      # Min price today (based on ENTSO-e prices_today)
+      - name: "ENTSO-e min price today"
+        unique_id: entsoe_min_price_today
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% if not prices %}
+            unknown
+          {% else %}
+            {% set vals = prices
+              | map(attribute='price')
+              | select('number')
+              | list %}
+            {% if vals | length == 0 %}
+              unknown
+            {% else %}
+              {{ vals | min }}
+            {% endif %}
+          {% endif %}
+
+      # Max price today (based on ENTSO-e prices_today)
+      - name: "ENTSO-e max price today"
+        unique_id: entsoe_max_price_today
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% if not prices %}
+            unknown
+          {% else %}
+            {% set vals = prices
+              | map(attribute='price')
+              | select('number')
+              | list %}
+            {% if vals | length == 0 %}
+              unknown
+            {% else %}
+              {{ vals | max }}
+            {% endif %}
+          {% endif %}
+
+      # Low price threshold ≈ Q1 (25th percentile)
+      - name: "ENTSO-e low price threshold"
+        unique_id: entsoe_low_price_threshold
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% if not prices %}
+            unknown
+          {% else %}
+            {% set vals = prices
+              | map(attribute='price')
+              | select('number')
+              | list %}
+            {% set n = vals | length %}
+            {% if n < 2 %}
+              unknown
+            {% else %}
+              {% set sorted = vals | sort %}
+              {# Approximate 25th percentile (Q1) #}
+              {% set idx = (0.25 * (n - 1)) | int %}
+              {{ sorted[idx] }}
+            {% endif %}
+          {% endif %}
+
+      # High price threshold ≈ Q3 (75th percentile)
+      - name: "ENTSO-e high price threshold"
+        unique_id: entsoe_high_price_threshold
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% if not prices %}
+            unknown
+          {% else %}
+            {% set vals = prices
+              | map(attribute='price')
+              | select('number')
+              | list %}
+            {% set n = vals | length %}
+            {% if n < 2 %}
+              unknown
+            {% else %}
+              {% set sorted = vals | sort %}
+              {# Approximate 75th percentile (Q3) #}
+              {% set idx = (0.75 * (n - 1)) | int %}
+              {{ sorted[idx] }}
+            {% endif %}
+          {% endif %}
+
+      # Round-trip profit for today (based on those min/max)
+      - name: "ENTSO-e round trip profit today"
+        unique_id: entsoe_round_trip_profit_today
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set tax = 0.14 %}
+          {% set lowest = states('sensor.entso_e_min_price_today') | float(0) %}
+          {% set highest = states('sensor.entso_e_max_price_today') | float(0) %}
+          {% if lowest == 0 and highest == 0 %}
+            unknown
+          {% else %}
+            {{ (highest + tax) * 0.75 - (lowest + tax) }}
+          {% endif %}

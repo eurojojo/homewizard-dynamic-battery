@@ -1,21 +1,24 @@
 # ENTSO-e Price Curve Percentile Approach  
 ### Using Percentiles and the Five-Number Summary for Dynamic Thresholds in Home Assistant
 
-This document explains how to derive **dynamic low/high price thresholds** from a daily electricity price curve using **percentiles** based on the basics of the so-called **five-number summary**, and how these thresholds can be used in Home Assistant to control the HomeWizard Plug-In Battery.
+This document explains how to derive **dynamic low/high price thresholds** from a daily electricity price curve using **percentiles** and the idea of the **five-number summary**, and how those thresholds can be used in Home Assistant to control the HomeWizard Plug-In Battery.
 
-Although ENTSO-e data is used as an example, this method works with *any* hourly price integration that exposes a list of prices (e.g. Nordpool, Tibber, EasyEnergy, Dynamic Energy Contract add-ons).
+Although ENTSO-e data is used as an example, this method works with *any* hourly price integration that exposes a list of prices (for example Nordpool, Tibber, EasyEnergy, Dynamic Energy Contract add-ons).
 
 ---
 
 ## 📈 Five-Number Summary
-A simplified Home Assistant automation could use *fixed margins* around the lowest and highest electricity price of the day, such as:
 
-- `low_margin = lowest + 0.03`
+A simple Home Assistant automation can work with *fixed margins* around the daily minimum and maximum electricity price, such as:
+
+- `low_margin = lowest + 0.03`  
 - `high_margin = highest - (spread / 2.5)`
 
-While workable, fixed margins **don’t adapt** to the actual shape of the price curve.
+This is workable, but it does **not adapt** to the actual *shape* of the price curve.  
 
-For a distribution such as 24 hourly electricity prices, the **five-number summary** consists of:
+On some days almost all prices are clustered in a narrow band; on other days there are very deep valleys and sharp peaks.
+
+For any distribution (including a list of 24 hourly prices), the classic **five-number summary** consists of:
 
 - Minimum  
 - **Q1** — 25th percentile  
@@ -23,7 +26,7 @@ For a distribution such as 24 hourly electricity prices, the **five-number summa
 - **Q3** — 75th percentile  
 - Maximum  
 
-This provides a compact statistical description of the price curve and divides it into meaningful regions. You can find it in visualisations like boxplots.
+This gives a compact statistical description of the curve and splits it into meaningful regions. In data visualisation you see this in [`boxplots`](https://en.wikipedia.org/wiki/Box_plot): the box is Q1–Q3, the line is the median, and the “whiskers” are min and max.
 
 ---
 
@@ -34,185 +37,184 @@ We replace fixed logic like:
 - `low_margin = lowest + 0.03`  
 - `high_margin = highest - (spread / 2.5)`
 
-with **statistical thresholds**:
+with **statistical thresholds** based on today’s price distribution:
 
 - **Low threshold ≈ Q1 (25th percentile)** → “cheap hours”  
 - **High threshold ≈ Q3 (75th percentile)** → “expensive hours”
 
-The automation becomes dynamic and adjusts to the actual price distribution of the day.
+Because Q1 and Q3 are derived from the actual curve of the day, the automation:
+
+- automatically adapts when prices are almost flat;
+- still behaves sensibly when there is a very deep low or a very high peak;
+- does not need any hardcoded “3 cent” or “half the spread” magic numbers.
+
+These thresholds are then used by the battery automation to decide when to:
+
+- charge from PV surplus,
+- charge from the grid,
+- discharge to support expensive hours,
+- or stay in standby.
 
 ---
 
-## 🔍 Extracting the price curve
+## 🔢 Getting the right price series
 
-ENTSO-e sensors typically expose data like:
+The ENTSO-e integration exposes several attributes on the average price sensor, typically:
 
-- `today` or `prices_today`
-- a list of attributes
-  each with `time` and `price`
+- `prices_today` — prices for “today” (UTC-based day window)  
+- `prices_tomorrow` — the next day  
+- `prices` — a rolling window that spans more than one day
 
-Example (simplified):
+In winter, the UTC day does **not** perfectly match the local day in the Netherlands, and
+`prices_today` may temporarily miss the last local hour until the next update is fetched.
 
-```yaml
-attributes:
-  prices_today:
-    - time: "2025-11-26 00:00:00"
-      price: 0.10555
-    - time: "2025-11-26 01:00:00"
-      price: 0.10274
-    ...
+To keep the configuration simple and predictable for most users, this project:
+
+- uses **`prices_today`** as the base series for *today*;
+- always derives min, max, Q1 and Q3 from that same list;
+- recomputes these values automatically when ENTSO-e refreshes the prices.
+
+For most Home Assistant setups this is sufficient and keeps the templates readable.
+If you need stricter local-day handling you can adapt the templates to filter the more general `prices` attribute by timestamp.
+
+---
+
+## 🧱 Sensor architecture
+
+All required template sensors are defined in:
+
+> [**`automations/advanced_pricing_sensors.yaml`**](../automations/advanced_pricing_sensors.yaml)
+
+You can open that file in your editor to see the full YAML. It defines the following sensors:
+
+1. `sensor.entso_e_min_price_today`  
+   - Minimum price of **today**, based on `prices_today`.
+
+2. `sensor.entso_e_max_price_today`  
+   - Maximum price of **today**, based on `prices_today`.
+
+3. `sensor.entso_e_low_price_threshold`  
+   - Approximate **Q1** (25th percentile) of today’s price curve.  
+   - Used as the **“cheap” threshold** in the automations.
+
+4. `sensor.entso_e_high_price_threshold`  
+   - Approximate **Q3** (75th percentile) of today’s price curve.  
+   - Used as the **“expensive” threshold** in the automations.
+
+5. `sensor.entso_e_round_trip_profit_today`  
+   - A derived value that estimates whether price arbitrage is worth it for today, after taxes and battery round-trip losses.
+
+## 📊 How Q1 and Q3 are calculated
+
+In the YAML, Q1 and Q3 are computed by:
+
+1. Taking `prices_today` from `sensor.entso_e_average_electricity_price`.
+2. Extracting the `price` value from each entry.
+3. Sorting the list of numeric prices.
+4. Picking an index based on the desired percentile.
+
+For example, for Q1:
+
+```jinja
+{% set n = vals | length %}
+{% set sorted = vals | sort %}
+{% set idx = (0.25 * (n - 1)) | int %}
+{{ sorted[idx] }}
 ```
 
-Any provider exposing a list of prices (Nordpool, Tibber, EasyEnergy, Dynamic-Contract add-ons) works identically.
-We only need the array of hourly **price** values.
+This “index-based” approach is a simple approximation of the 25th percentile and is more than precise enough for 24 hourly prices.
 
----
+Q3 uses the same idea with 0.75 instead of 0.25 to obtain the 75th percentile.
 
-## 🧱 Architecture
+## 💰 Round-trip profit sensor
 
-We create two **template sensors**:
+The project also exposes:
 
-- `sensor.entso_e_low_price_threshold` → Q1 (approx. 25th percentile)  
-- `sensor.entso_e_high_price_threshold` → Q3 (approx. 75th percentile)
+- `sensor.entso_e_round_trip_profit_today`
 
-These sensors:
+This sensor estimates whether **charging at today’s minimum price and discharging at today’s maximum price** is profitable once you include:
 
-- extract the price list  
-- sort it  
-- compute approximate percentile indices  
-- update automatically when the underlying ENTSO sensor updates  
-- impose **zero overhead** on your main battery automation
+- **energy taxes**  
+- **round-trip efficiency of the HomeWizard Plug-In Battery**
 
-### Why not compute percentiles inside the automation?
+The YAML uses two hardcoded values:
 
-Because your battery automation triggers every few minutes.  
-Percentile computation should happen **only when price data updates**.
+- `tax = 0.14` €/kWh  
+  - A practical approximation for the combined Dutch energy tax + VAT on a kWh.  
+  - Adjust this if your tax regime is different.
 
-### Why not use Python scripts?
+- Round-trip efficiency = **75%** (`0.75`)  
+  - Based on the typical round-trip efficiency of the HomeWizard Plug-In Battery.  
+  - If you have newer hardware or your own measured efficiency, you can change this.
 
-A Python script would work, but is unnecessary:  
-template sensors in YAML are simpler, clearer, and version-controlled in your Git repo.
+Adjust if you have better measurements for your setup.
 
----
+The formula in the template is:
 
-## 🛠 Template sensors for Q1 & Q3
+```text
+(highest + tax) * 0.75 - (lowest + tax)
 
-Add the following to `configuration.yaml` or any `templates:` block:
+The difference is the theoretical profit per kWh of a perfect “charge low / discharge high” cycle.
+
+If this round-trip profit is smaller than a chosen threshold (for example 0.02 €/kWh), the advanced battery automation can decide to ignore arbitrage for that day and simply use the battery for self-consumption, avoiding unnecessary cycling.
+
+🛠 Installing the sensors in Home Assistant
+
+To make these sensors available in your own Home Assistant instance you need to add the template block from this repository to your configuration.yaml.
+
+1. Locate your Home Assistant configuration
+On a typical installation this is the folder that contains configuration.yaml, automations.yaml, etc. For example:
+
+Home Assistant OS / Container: usually /config
+
+Home Assistant Core (venv): often ~/.homeassistant
+
+Open configuration.yaml in a text editor.
+
+2. Add (or extend) the template: section
+In this repository the complete template block lives in:
+
+[**`automations/advanced_pricing_sensors.yaml`**](../automations/advanced_pricing_sensors.yaml)
+
+Open that file and copy the entire template: block.
+
+Now in your own configuration.yaml:
+
+If you do not yet have a template: key
+you can paste the block at the top level, for example:
 
 ```yaml
 template:
   - sensor:
-
-      - name: "ENTSO-e low price threshold"
-        unique_id: entsoe_low_price_threshold
-        unit_of_measurement: "€/kWh"
-        state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
-          {% if not prices %}
-            unknown
-          {% else %}
-            {% set vals = prices
-              | map(attribute='price')
-              | select('number')
-              | list %}
-            {% set n = vals | length %}
-            {% if n < 2 %}
-              unknown
-            {% else %}
-              {% set sorted = vals | sort %}
-              {# Approximate 25th percentile (Q1) #}
-              {% set idx = (0.25 * (n - 1)) | int %}
-              {{ sorted[idx] }}
-            {% endif %}
-          {% endif %}
-
-      - name: "ENTSO-e high price threshold"
-        unique_id: entsoe_high_price_threshold
-        unit_of_measurement: "€/kWh"
-        state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
-          {% if not prices %}
-            unknown
-          {% else %}
-            {% set vals = prices
-              | map(attribute='price')
-              | select('number')
-              | list %}
-            {% set n = vals | length %}
-            {% if n < 2 %}
-              unknown
-            {% else %}
-              {% set sorted = vals | sort %}
-              {# Approximate 75th percentile (Q3) #}
-              {% set idx = (0.75 * (n - 1)) | int %}
-              {{ sorted[idx] }}
-            {% endif %}
-          {% endif %}
+      # Paste the sensor definitions from
+      # automations/advanced_pricing_sensors.yaml here
 ```
 
-You can of course modify the 0.25 and 0.75 numbers to your liking.
+If you already have a template: section
+merge the - sensor: list from this project into your existing one.
+The important rule is: do not create a second top-level template: key, instead
+append the new - sensor: entries to your existing list.
 
-### What these sensors do
-
-- extract `prices_today`  
-- filter valid numeric values  
-- sort the list  
-- calculate:
-  - **Q1** at index `0.25 * (n-1)`  
-  - **Q3** at index `0.75 * (n-1)`  
-- provide the result as a normal Home Assistant sensor
-
-This effectively splits the price curve into:
-
-- **cheap hours** (below Q1)  
-- **middle band** (between Q1 and Q3)  
-- **expensive hours** (above Q3)
-
----
-
-## 🔄 Integrating with the battery automation
-
-In your Home Assistant automation, define:
+If you prefer to keep the YAML in a separate file, you can also refactor your config to use
+!include, for example:
 
 ```yaml
-low_threshold: "{{ states('sensor.entso_e_low_price_threshold') | float(0) }}"
-high_threshold: "{{ states('sensor.entso_e_high_price_threshold') | float(0) }}"
+template: !include path/to/your/templates.yaml
 ```
 
-Replace fixed logic such as:
+and then place the - sensor: block from automations/advanced_pricing_sensors.yaml
+into that included file. The exact include structure depends on how your configuration
+is organised.
 
-```yaml
-current < (lowest + low_margin)
-```
+3. Check the configuration and reload  
 
-with:
+In Home Assistant:
 
-```yaml
-current <= low_threshold
-```
+Go to Settings → System → Developer tools → Check configuration and make sure
+there are no template errors.
 
-Replace:
-
-```yaml
-current > (highest - high_margin)
-```
-
-with:
-
-```yaml
-current > high_threshold
-```
-
-Middle band:
-
-```yaml
-current > low_threshold and current <= high_threshold
-```
-
-Your automation no longer relies on fixed margins or spreads.  
-It becomes fully data-driven.
-
----
+Restart Home Assistant, or (on recent versions) use Developer tools → YAML → Reload
+Template Entities.
 
 ## ✔ Summary
 
