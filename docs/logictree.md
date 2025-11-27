@@ -2,7 +2,7 @@
 *(Decision Tree Overview)*
 
 This document describes the full decision logic used to control the HomeWizard Plug-In Battery, based on ENTSO-e electricity prices, PV export, household load, and battery state of charge.  
-It corresponds 1:1 with the implementation in `advanced-homewizard-battery-price.yaml`.
+It corresponds 1:1 with the implementation in [**`automations/advanced_pricing_sensors.yaml`**](automations/advanced_pricing_sensors.yaml).
 
 The automation uses **percentile-based thresholds** derived from the daily price curve:
 

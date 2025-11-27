@@ -74,8 +74,7 @@ The repository contains **two** fully documented automations.
 ---
 
 ## ✅ Simple Automation  
-**File:** `automations/simple-homewizard-battery-price.yaml`
-[**`automations/simple-homewizard-battery-price.yaml`**](../automations/simple-homewizard-battery-price.yaml)
+📄 [**`automations/simple-homewizard-battery-price.yaml`**](automations/simple-homewizard-battery-price.yaml)
 
 Uses:  
 - fixed *cheap* threshold = `lowest_price + 0.03 EUR`  
@@ -98,15 +97,17 @@ This automation still includes:
 
 ## 🔓 Unlocking Battery Group Mode in Home Assistant
 
-The battery group mode (“Battery group mode”) is not located under the battery itself, but under the **P1 meter**. This entity is disabled by default.
+For both the simple and advanced automation, the battery group mode must be unlocked first.  
 
-In general, it works like this (see also the Home Assistant documentation on the HomeWizard integration):
+The battery group mode (“Battery group mode”) is not located under the battery itself, but under the **P1 meter**. This entity is disabled by default.  
+
+In general, it works like this (see also the [Home Assistant documentation on the HomeWizard integration](https://www.home-assistant.io/integrations/homewizard/#plug-in-battery)):
 
 1. In Home Assistant, go to **Settings → Devices & Services**.
 2. Open the **HomeWizard Energy** integration.
 3. Click on your **P1 meter** device.
 4. In the **Configuration** section, you will see a link such as `+1 disabled entity` (or another number).
-5. Click on it, open the “Battery group mode” entity and click the gear icon in the top-right corner.
+5. Click on it, open the “Batterijgroepmodus” entity and click the gear icon in the top-right corner.
 6. Enable the entity and click Save.
 7. After ~30 seconds it will appear as a normal entity, for example `select.p1_meter_batterygroupmode`.
 
@@ -128,7 +129,7 @@ We will create a single automation that:
 2. Click **+ Add automation**.
 3. Choose **Empty automation**.
 4. At the top, enter a name, for example:  
-   `HomeWizard battery based on energy price`.
+   `HomeWizard battery based on energy price`
 5. Click **Save** once at the bottom.
 
 ### Step 2 – Open the YAML editor
@@ -136,6 +137,8 @@ We will create a single automation that:
 1. In the same automation, click the **three dots (⋮)** in the top-right corner.
 2. Choose **Edit in YAML**.
 3. Replace the entire contents with the YAML below and adjust the `entity_id`s to match your installation if needed.
+
+📄 [**`automations/simple-homewizard-battery-price.yaml`**](automations/simple-homewizard-battery-price.yaml)
 
 ---
 
@@ -145,7 +148,7 @@ This version uses **statistical analysis** of the daily ENTSO-e price curve to c
 
 The full explanation and how to install can be found here:
 
-📄 [**`docs/price-curve-percentile-approach.md`**](../docs/price-curve-percentile-approach.md)
+📄 [**`docs/price-curve-percentile-approach.md`**](docs/price-curve-percentile-approach.md)
 
 ---
 
@@ -172,7 +175,7 @@ The tree makes it easy to verify that:
 - it avoids unnecessary cycling near 100% SoC  
 - it only performs arbitrage when it is profitable
 
-See the decision tree in `docs/logictree.md`  
+See the decision tree in [`docs/logictree.md`](docs/logictree.md)  
 
 ---
 

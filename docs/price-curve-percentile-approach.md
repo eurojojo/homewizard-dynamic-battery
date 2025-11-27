@@ -83,7 +83,7 @@ If you need stricter local-day handling you can adapt the templates to filter th
 
 All required template sensors are defined in:
 
-> [**`automations/advanced_pricing_sensors.yaml`**](../automations/advanced_pricing_sensors.yaml)
+> [**`automations/advanced_pricing_sensors.yaml`**](automations/advanced_pricing_sensors.yaml)
 
 You can open that file in your editor to see the full YAML. It defines the following sensors:
 
@@ -174,7 +174,7 @@ Open configuration.yaml in a text editor.
 2. Add (or extend) the template: section
 In this repository the complete template block lives in:
 
-[**`automations/advanced_pricing_sensors.yaml`**](../automations/advanced_pricing_sensors.yaml)
+[**`automations/advanced_pricing_sensors.yaml`**](automations/advanced_pricing_sensors.yaml)
 
 Open that file and copy the entire template: block.
 
