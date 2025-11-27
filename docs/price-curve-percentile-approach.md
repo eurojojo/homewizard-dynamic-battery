@@ -153,6 +153,7 @@ The formula in the template is:
 
 ```text
 (highest + tax) * 0.75 - (lowest + tax)
+```
 
 The difference is the theoretical profit per kWh of a perfect “charge low / discharge high” cycle.
 
