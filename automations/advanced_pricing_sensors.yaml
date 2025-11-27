@@ -1,3 +1,13 @@
+# HomeWizard Battery Dynamic Control Automation
+# Author: Joost Smits
+# Version: 0.7, 27 November 2025
+# License: MIT
+# Repository: https://github.com/eurojojo/homewizard-dynamic-battery
+#
+# This automation controls the HomeWizard Plug-In Battery using
+# ENTSO-e percentile thresholds (Q1/Q3), combined with PV export,
+# grid load and profitability logic.
+
 template:
   - sensor:
 
