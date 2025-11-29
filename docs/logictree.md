@@ -147,3 +147,13 @@ This decision tree is fully aligned with the current automation code, including:
 - Heavy and super-heavy load handling  
 - Profitability logic based on daily min/max prices and round-trip efficiency  
 - A robust fallback that prevents a nearly empty battery from staying idle forever.
+
+---
+
+# 👤 Author & License
+
+**Author:** Joost Smits  
+**GitHub:** https://github.com/eurojojo  
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+You are free to use, modify and distribute this work, provided attribution is preserved.

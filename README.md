@@ -184,8 +184,7 @@ See the decision tree in [`docs/logictree.md`](docs/logictree.md)
 
 **Author:** Joost Smits  
 **GitHub:** https://github.com/eurojojo  
-**License:** MIT  
-![MIT Badge](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 You are free to use, modify and distribute this work, provided attribution is preserved.
 

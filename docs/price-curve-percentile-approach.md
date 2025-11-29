@@ -238,3 +238,13 @@ This percentile-based approach provides:
 - no need for Python scripts or external components
 
 It is an elegant way to bring proper statistical analysis to energy automations in Home Assistant.
+
+---
+
+# 👤 Author & License
+
+**Author:** Joost Smits  
+**GitHub:** https://github.com/eurojojo  
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+You are free to use, modify and distribute this work, provided attribution is preserved.
