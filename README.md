@@ -36,7 +36,7 @@ This repository provides a solution to that missing functionality, fully configu
 # 📸 Examples
 
 ### 1. Flattened consumption curve (HomeWizard app example)
-*Shows how the Plug-In Battery kept household usage flat while the EV charged during the night.*
+*Shows how the Plug-In Battery kept household usage flat *in november*, buying electricity from the grid at low prices, while the EV charged during the night, not draining the battery.*
 
 ![Flattened usage curve](docs/img/flattened-curve.png)
 
