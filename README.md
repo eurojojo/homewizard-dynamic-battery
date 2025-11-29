@@ -1,5 +1,5 @@
 # HomeWizard Dynamic Battery Control for Home Assistant  
-**Version: 0.8, 27 November 2025**  
+**Version: 0.8, 29 November 2025**  
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A complete, modular automation system that turns the [**HomeWizard Plug-In Battery**](https://www.homewizard.com/) into a *smart, price-aware, PV-aware* device — even though HomeWizard does **not** yet support “charge-only” or “discharge-only” modes.
