@@ -1,6 +1,6 @@
 # HomeWizard Battery Dynamic Control Automation (Simple Version)
 # Author: Joost Smits
-# Version: 0.7, 27 November 2025
+# Version: 0.8, 28 November 2025
 # License: MIT
 # Repository: https://github.com/eurojojo/homewizard-dynamic-battery
 #
@@ -121,18 +121,18 @@ actions:
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
-            value_template: "{{ rt_profit <= min_profit }}"
+            value_template: "{{ rt_profit < min_profit }}"
         sequence:
           - choose:
               # 3.1 For all non-expensive hours → standby
               - conditions:
                   - condition: template
-                    value_template: "{{ current < high_threshold }}"
+                    value_template: "{{ current <= high_threshold }}"
                 sequence:
                   - action: select.select_option
                     target: { entity_id: select.p1_meter_batterijgroepmodus }
                     data: { option: standby }
-            # 3.2 Expensive hours (current >= high_threshold) → zero
+            # 3.2 Expensive hours (current > high_threshold) → zero
             default:
               - action: select.select_option
                 target: { entity_id: select.p1_meter_batterijgroepmodus }
@@ -172,7 +172,7 @@ actions:
           - condition: template
             value_template: >
               {{ current <= low_threshold and soc < 98 and
-                 export_power <= min_export_power }}
+                 export_power < min_export_power }}
         sequence:
           - action: select.select_option
             target: { entity_id: select.p1_meter_batterijgroepmodus }
