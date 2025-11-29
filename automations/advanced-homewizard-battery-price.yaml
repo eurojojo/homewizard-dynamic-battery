@@ -108,7 +108,7 @@ actions:
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
-            value_template: "{{ rt_profit <= min_profit }}"
+            value_template: "{{ rt_profit < min_profit }}"
         sequence:
           - choose:
               # 3.1 For all non-expensive hours → standby
@@ -144,7 +144,7 @@ actions:
       # ────────────────────────────────────────────────────────────
       - conditions:
           - condition: template
-            value_template: "{{ current <= low_threshold and soc >= 98 }}"
+            value_template: "{{ current < low_threshold and soc >= 98 }}"
         sequence:
           - action: select.select_option
             target: { entity_id: select.p1_meter_batterijgroepmodus }
@@ -158,8 +158,8 @@ actions:
       - conditions:
           - condition: template
             value_template: >
-              {{ current <= low_threshold and soc < 98 and
-                 export_power <= min_export_power }}
+              {{ current < low_threshold and soc < 98 and
+                 export_power < min_export_power }}
         sequence:
           - action: select.select_option
             target: { entity_id: select.p1_meter_batterijgroepmodus }
@@ -174,7 +174,7 @@ actions:
       - conditions:
           - condition: template
             value_template: >
-              {{ current > low_threshold and
+              {{ current >= low_threshold and
                  current <= high_threshold }}
         sequence:
           - action: select.select_option

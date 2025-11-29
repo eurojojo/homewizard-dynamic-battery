@@ -72,12 +72,11 @@ In winter, the UTC day does **not** perfectly match the local day in the Netherl
 
 To keep the configuration simple and predictable for most users, this project:
 
-- uses **`prices_today`** as the base series for *today*;
+- uses **`prices`** (UTC) as the base series for *today's prices* converted to the local timezone;
 - always derives min, max, Q1 and Q3 from that same list;
 - recomputes these values automatically when ENTSO-e refreshes the prices.
 
 For most Home Assistant setups this is sufficient and keeps the templates readable.
-If you need stricter local-day handling you can adapt the templates to filter the more general `prices` attribute by timestamp.
 
 ---
 
@@ -89,28 +88,31 @@ All required template sensors are defined in:
 
 You can open that file in your editor to see the full YAML. It defines the following sensors:
 
-1. `sensor.entso_e_min_price_today`  
-   - Minimum price of **today**, based on `prices_today`.
+1. `sensor.entsoe_prices_today_local_list`  
+   - Local prices today as list of time/price in local timezone, based on ENTSO-e `prices`.
 
-2. `sensor.entso_e_max_price_today`  
-   - Maximum price of **today**, based on `prices_today`.
+2. `sensor.entso_e_min_price_today`  
+   - Minimum price of **today**, based on local `prices_today`.
 
-3. `sensor.entso_e_low_price_threshold`  
+3. `sensor.entso_e_max_price_today`  
+   - Maximum price of **today**, based on local `prices_today`.
+
+4. `sensor.entso_e_low_price_threshold`  
    - Approximate **Q1** (25th percentile) of today’s price curve.  
    - Used as the **“cheap” threshold** in the automations.
 
-4. `sensor.entso_e_high_price_threshold`  
+5. `sensor.entso_e_high_price_threshold`  
    - Approximate **Q3** (75th percentile) of today’s price curve.  
    - Used as the **“expensive” threshold** in the automations.
 
-5. `sensor.entso_e_round_trip_profit_today`  
+6. `sensor.entso_e_round_trip_profit_today`  
    - A derived value that estimates whether price arbitrage is worth it for today, after taxes and battery round-trip losses.
 
 ## 📊 How Q1 and Q3 are calculated
 
 In the YAML, Q1 and Q3 are computed by:
 
-1. Taking `prices_today` from `sensor.entso_e_average_electricity_price`.
+1. Taking `prices_today` from `sensor.entsoe_prices_today_local_list`.
 2. Extracting the `price` value from each entry.
 3. Sorting the list of numeric prices.
 4. Picking an index based on the desired percentile.
@@ -223,6 +225,7 @@ Template Entities.
 
 This percentile-based approach provides:
 
+- conversion of ENTSO-e prices to the local timezone
 - dynamic low/high thresholds using **Q1 and Q3**  
 - no reliance on hardcoded offsets  
 - automatic updates only when price data updates  

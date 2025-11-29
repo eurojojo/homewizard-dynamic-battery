@@ -1,6 +1,6 @@
 # HomeWizard Battery Dynamic Control Automation
 # Author: Joost Smits
-# Version: 0.7, 27 November 2025
+# Version: 0.8, 29 November 2025
 # License: MIT
 # Repository: https://github.com/eurojojo/homewizard-dynamic-battery
 #
@@ -11,12 +11,44 @@
 template:
   - sensor:
 
-      # Min price today (based on ENTSO-e prices_today)
+      # Local prices today as list of time/price in local timezone, based on ENTSO-e `prices`
+      - name: "ENTSO-e prices today (local list)"
+        unique_id: entsoe_prices_today_local_list
+        icon: mdi:clock-time-four
+        state: "ok"
+        attributes:
+          prices_today: >
+            {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices') or [] %}
+            {% if not prices %}
+              []
+            {% else %}
+              {% set today_start = as_timestamp(today_at('00:00')) %}
+              {% set tomorrow_start = today_start + 86400 %}
+              {% set ns = namespace(items=[]) %}
+
+              {% for p in prices %}
+                {% set dt_utc = as_datetime(p.time) %}
+                {% if dt_utc is not none %}
+                  {% set dt_local = as_local(dt_utc) %}
+                  {% set ts = as_timestamp(dt_local) %}
+                  {% if today_start <= ts < tomorrow_start %}
+                    {% set ns.items = ns.items + [ {
+                      'time': dt_local.isoformat(),
+                      'price': p.price
+                    } ] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+
+              {{ ns.items }}
+            {% endif %}
+
+      # Min price today (based on local prices_today list)
       - name: "ENTSO-e min price today"
         unique_id: entsoe_min_price_today
         unit_of_measurement: "€/kWh"
         state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
           {% if not prices %}
             unknown
           {% else %}
@@ -31,12 +63,12 @@ template:
             {% endif %}
           {% endif %}
 
-      # Max price today (based on ENTSO-e prices_today)
+      # Max price today (based on local prices_today list)
       - name: "ENTSO-e max price today"
         unique_id: entsoe_max_price_today
         unit_of_measurement: "€/kWh"
         state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
           {% if not prices %}
             unknown
           {% else %}
@@ -51,12 +83,12 @@ template:
             {% endif %}
           {% endif %}
 
-      # Low price threshold ≈ Q1 (25th percentile)
+      # Low price threshold ≈ Q1 (25th percentile, based on local prices_today list)
       - name: "ENTSO-e low price threshold"
         unique_id: entsoe_low_price_threshold
         unit_of_measurement: "€/kWh"
         state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
           {% if not prices %}
             unknown
           {% else %}
@@ -75,12 +107,12 @@ template:
             {% endif %}
           {% endif %}
 
-      # High price threshold ≈ Q3 (75th percentile)
+      # High price threshold ≈ Q3 (75th percentile, based on local prices_today list)
       - name: "ENTSO-e high price threshold"
         unique_id: entsoe_high_price_threshold
         unit_of_measurement: "€/kWh"
         state: >
-          {% set prices = state_attr('sensor.entso_e_average_electricity_price', 'prices_today') %}
+          {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
           {% if not prices %}
             unknown
           {% else %}
