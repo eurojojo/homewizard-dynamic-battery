@@ -36,12 +36,14 @@ This repository provides a solution to that missing functionality, fully configu
 # 📸 Examples
 
 ### 1. Flattened consumption curve (HomeWizard app example)
-*Shows how the Plug-In Battery kept household usage flat *in november*, buying electricity from the grid at low prices, while the EV charged during the night, not draining the battery.*
+*Shows how the Plug-In Battery kept household usage flat *in november*, buying electricity from the grid at low prices, while the EV charged during the night, not draining the battery. Subsequently the battery *
+
+*The image shows how, **end November**, the Plug-In Battery kept household usage almost flat by buying electricity cheaply from the grid, while the EV charged overnight and the dishwasher  was running, without drawing on the battery. Later in the morning the charged battery stepped in as prices rose, briefly topping up when the sun came out and, just as in summer, was then able to offset the higher consumption in the evening.*
 
 ![Flattened usage curve](docs/img/flattened-curve.png)
 
 ### 2. Daily electricity prices curve
-*Shows a daytime mini-peak, a midday dip, and a strong evening price spike.*
+*Prices of that same day. It shows a daytime mini-peak, a midday dip, and a strong evening price spike.*
 
 <img src="docs/img/price-curve.png" width="400" />
 
