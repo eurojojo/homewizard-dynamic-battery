@@ -16,7 +16,7 @@ A simple Home Assistant automation can work with *fixed margins* around the dail
 - `low_margin = lowest + 0.03`  
 - `high_margin = highest - (spread / 2.5)`
 
-This is workable, but it does **not adapt** to the actual *shape* of the price curve.  
+This is workable, but it does **not adapt** to the actual *shape* of the price curve.
 
 On some days almost all prices are clustered in a narrow band; on other days there are very deep valleys and sharp peaks.
 
@@ -67,13 +67,12 @@ The ENTSO-e integration exposes several attributes on the average price sensor, 
 - `prices_tomorrow` — the next day  
 - `prices` — a rolling window that spans more than one day
 
-In winter, the UTC day does **not** perfectly match the local day in the Netherlands, and
-`prices_today` may temporarily miss the last local hour until the next update is fetched.
+In winter, the UTC day does **not** perfectly match the local day in the Netherlands, and `prices_today` may temporarily miss the last local hour until the next update is fetched.
 
 To keep the configuration simple and predictable for most users, this project:
 
-- uses **`prices`** (UTC) as the base series for *today's prices* converted to the local timezone;
-- always derives min, max, Q1 and Q3 from that same list;
+- uses **`prices`** (UTC) as the base series for *today's prices* converted to the local timezone;  
+- always derives min, max, Q1 and Q3 from that same list;  
 - recomputes these values automatically when ENTSO-e refreshes the prices.
 
 For most Home Assistant setups this is sufficient and keeps the templates readable.
@@ -88,7 +87,7 @@ All required template sensors are defined in:
 
 You can open that file in your editor to see the full YAML. It defines the following sensors:
 
-1. `sensor.entsoe_prices_today_local_list`  
+1. `sensor.entso_e_prices_today_local_list`  
    - Local prices today as list of time/price in local timezone, based on ENTSO-e `prices`.
 
 2. `sensor.entso_e_min_price_today`  
@@ -105,14 +104,19 @@ You can open that file in your editor to see the full YAML. It defines the follo
    - Approximate **Q3** (75th percentile) of today’s price curve.  
    - Used as the **“expensive” threshold** in the automations.
 
-6. `sensor.entso_e_round_trip_profit_today`  
+6. `sensor.entso_e_high_outlier_threshold`  
+	 - Calculate the upper outlier threshold, to signal outlier prices.  
+	 - The upper outlier threshold is prices above Q3 + 1.5 × IQR (Tukey)  
+	 - IQR = Q3 − Q1
+
+7. `sensor.entso_e_round_trip_profit_today`  
    - A derived value that estimates whether price arbitrage is worth it for today, after taxes and battery round-trip losses.
 
 ## 📊 How Q1 and Q3 are calculated
 
 In the YAML, Q1 and Q3 are computed by:
 
-1. Taking `prices_today` from `sensor.entsoe_prices_today_local_list`.
+1. Taking `prices_today` from `sensor.entso_e_prices_today_local_list`.
 2. Extracting the `price` value from each entry.
 3. Sorting the list of numeric prices.
 4. Picking an index based on the desired percentile.

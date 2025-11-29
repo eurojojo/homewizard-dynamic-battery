@@ -11,9 +11,9 @@
 template:
   - sensor:
 
-      # Local prices today as list of time/price in local timezone, based on ENTSO-e `prices`
+      # Local prices today as list of time/price in local timezone
       - name: "ENTSO-e prices today (local list)"
-        unique_id: entsoe_prices_today_local_list
+        unique_id: entso_e_prices_today_local_list
         icon: mdi:clock-time-four
         state: "ok"
         attributes:
@@ -45,7 +45,7 @@ template:
 
       # Min price today (based on local prices_today list)
       - name: "ENTSO-e min price today"
-        unique_id: entsoe_min_price_today
+        unique_id: entso_e_min_price_today
         unit_of_measurement: "€/kWh"
         state: >
           {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
@@ -65,7 +65,7 @@ template:
 
       # Max price today (based on local prices_today list)
       - name: "ENTSO-e max price today"
-        unique_id: entsoe_max_price_today
+        unique_id: entso_e_max_price_today
         unit_of_measurement: "€/kWh"
         state: >
           {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
@@ -85,7 +85,7 @@ template:
 
       # Low price threshold ≈ Q1 (25th percentile, based on local prices_today list)
       - name: "ENTSO-e low price threshold"
-        unique_id: entsoe_low_price_threshold
+        unique_id: entso_e_low_price_threshold
         unit_of_measurement: "€/kWh"
         state: >
           {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
@@ -109,7 +109,7 @@ template:
 
       # High price threshold ≈ Q3 (75th percentile, based on local prices_today list)
       - name: "ENTSO-e high price threshold"
-        unique_id: entsoe_high_price_threshold
+        unique_id: entso_e_high_price_threshold
         unit_of_measurement: "€/kWh"
         state: >
           {% set prices = state_attr('sensor.entso_e_prices_today_local_list', 'prices_today') %}
@@ -131,9 +131,26 @@ template:
             {% endif %}
           {% endif %}
 
+      # High price outlier threshold (Q3 + 1.5 * IQR)
+      - name: "ENTSO-e high price outlier threshold"
+        unique_id: entso_e_high_outlier_threshold
+        unit_of_measurement: "€/kWh"
+        state: >
+          {% set q1_state = states('sensor.entso_e_low_price_threshold') %}
+          {% set q3_state = states('sensor.entso_e_high_price_threshold') %}
+          {% if q1_state in ['unknown', 'unavailable', 'none', '']
+                or q3_state in ['unknown', 'unavailable', 'none', ''] %}
+            unknown
+          {% else %}
+            {% set q1 = q1_state | float %}
+            {% set q3 = q3_state | float %}
+            {% set iqr = q3 - q1 %}
+            {{ q3 + 1.5 * iqr }}
+          {% endif %}
+
       # Round-trip profit for today (based on those min/max)
       - name: "ENTSO-e round trip profit today"
-        unique_id: entsoe_round_trip_profit_today
+        unique_id: entso_e_round_trip_profit_today
         unit_of_measurement: "€/kWh"
         state: >
           {% set tax = 0.14 %}
